@@ -7,11 +7,15 @@ from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from transformers import pipeline
 
-#  UI CONFIG 
+# =========================
+# UI CONFIG
+# =========================
 st.set_page_config(page_title="AI Chatbot", layout="wide")
-st.title(" AI Support Chatbot")
+st.title("🤖 AI Support Chatbot")
 
-#  CUSTOM CSS 
+# =========================
+# CUSTOM CSS
+# =========================
 st.markdown("""
 <style>
 .chat-user {
@@ -31,24 +35,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-#  SESSION STATE 
+# =========================
+# SESSION STATE
+# =========================
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# CACHE VECTORSTORE 
+if "memory" not in st.session_state:
+    st.session_state.memory = None
+
+# =========================
+# LOAD VECTORSTORE
+# =========================
 @st.cache_resource
 def load_vectorstore():
     embedding = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
+
+    # IMPORTANT FIX:
+    # index.faiss + index.pkl are in ROOT, so use "."
     vectorstore = FAISS.load_local(
-        "faiss_index",
-        embedding,
+        ".",
+        embeddings=embedding,
         allow_dangerous_deserialization=True
     )
+
     return vectorstore
 
-#  CACHE LLM 
+# =========================
+# LOAD LLM
+# =========================
 @st.cache_resource
 def load_llm():
     pipe = pipeline(
@@ -56,21 +73,23 @@ def load_llm():
         model="google/flan-t5-base",
         framework="pt",
         max_new_tokens=200,
-        min_new_tokens=30,     
-        do_sample=True,           
-        temperature=0.7,         
-        num_beams=4,              
-        early_stopping=True,
-        repetition_penalty=2.5   
+        do_sample=True,
+        temperature=0.7,
+        num_beams=4,
+        repetition_penalty=2.5
     )
+
     return HuggingFacePipeline(pipeline=pipe)
 
-# CACHE CHAIN 
+# =========================
+# BUILD QA CHAIN
+# =========================
 @st.cache_resource
 def load_qa_chain(_vectorstore, _llm):
+
     retriever = _vectorstore.as_retriever(
         search_type="similarity",
-        search_kwargs={"k": 1}
+        search_kwargs={"k": 3}
     )
 
     memory = ConversationBufferMemory(
@@ -79,21 +98,27 @@ def load_qa_chain(_vectorstore, _llm):
         output_key="answer"
     )
 
-    template = """You are an AI assistant. Answer ONLY the question asked.
-     Do NOT include information about other topics.
-     Use only the most relevant part of the context.
-     Answer in 2-3 complete sentences.
+    st.session_state.memory = memory
 
-    Context: {context}
+    prompt_template = """
+You are a helpful AI assistant.
 
-    Question: {question}
+Use ONLY the given context to answer.
+If you don't know, say you don't know.
 
-    Answer only about '{question}':"""
+Context:
+{context}
+
+Question:
+{question}
+
+Answer in 2-3 clear sentences.
+"""
 
     prompt = PromptTemplate(
-    template=template,
-    input_variables=["context", "question"]
-)
+        template=prompt_template,
+        input_variables=["context", "question"]
+    )
 
     chain = ConversationalRetrievalChain.from_llm(
         llm=_llm,
@@ -102,25 +127,33 @@ def load_qa_chain(_vectorstore, _llm):
         return_source_documents=False,
         combine_docs_chain_kwargs={"prompt": prompt}
     )
+
     return chain
 
-#  LOAD RESOURCES 
+# =========================
+# LOAD EVERYTHING
+# =========================
 vectorstore = load_vectorstore()
 llm = load_llm()
 qa_chain = load_qa_chain(vectorstore, llm)
 
-#  SIDEBAR 
+# =========================
+# SIDEBAR
+# =========================
 st.sidebar.title("⚙️ Settings")
-st.sidebar.write("**Model:** FLAN-T5 base")
-st.sidebar.write("**Embeddings:** MiniLM-L6-v2")
-st.sidebar.write("**Vector Store:** FAISS")
+st.sidebar.write("Model: FLAN-T5 Base")
+st.sidebar.write("Embeddings: MiniLM-L6-v2")
+st.sidebar.write("Vector DB: FAISS")
 
 if st.sidebar.button("🗑️ Clear Chat"):
     st.session_state.chat_history = []
-    qa_chain.memory.clear()
+    if st.session_state.memory:
+        st.session_state.memory.clear()
     st.rerun()
 
-#  CHAT INPUT 
+# =========================
+# CHAT INPUT
+# =========================
 query = st.chat_input("Ask your question...")
 
 if query:
@@ -128,21 +161,18 @@ if query:
         with st.spinner("Thinking..."):
             result = qa_chain.invoke({"question": query})
             answer = result.get("answer", "Sorry, I couldn't find an answer.")
+
     except Exception as e:
-        answer = f" Error: {str(e)}"
+        answer = f"Error: {str(e)}"
 
     st.session_state.chat_history.append(("user", query))
     st.session_state.chat_history.append(("bot", answer))
 
-#  DISPLAY CHAT 
+# =========================
+# DISPLAY CHAT
+# =========================
 for role, message in st.session_state.chat_history:
     if role == "user":
-        st.markdown(
-            f"<div class='chat-user'> {message}</div>",
-            unsafe_allow_html=True
-        )
+        st.markdown(f"<div class='chat-user'>{message}</div>", unsafe_allow_html=True)
     else:
-        st.markdown(
-            f"<div class='chat-bot'> {message}</div>",
-            unsafe_allow_html=True
-        )
+        st.markdown(f"<div class='chat-bot'>{message}</div>", unsafe_allow_html=True)
