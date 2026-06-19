@@ -1,0 +1,2 @@
+Machine Learning is a subset of AI that enables systems to learn from data.
+It includes supervised, unsupervised, and reinforcement learning.
