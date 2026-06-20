@@ -94,13 +94,17 @@ def load_model():
 # =========================
 def generate_answer(tokenizer, model, context, question):
 
-    prompt = f"""
+   prompt = f"""
 You are a helpful AI assistant.
 
-Use ONLY the context below to answer.
+Your job is to explain clearly and in detail using ONLY the context provided.
 
-If answer is not in context, say:
-"I don't know based on the provided information."
+RULES:
+- Use only the given context
+- If context is not enough, say: "I don't know based on the provided information."
+- Do NOT copy raw text
+- Explain in simple and natural language
+- Give a helpful, slightly detailed answer (2–5 sentences)
 
 Context:
 {context}
@@ -108,7 +112,7 @@ Context:
 Question:
 {question}
 
-Answer in one clear sentence:
+Answer:
 """
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
