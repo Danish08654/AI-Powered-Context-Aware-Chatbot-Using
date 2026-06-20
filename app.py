@@ -1,12 +1,8 @@
 import streamlit as st
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import HuggingFacePipeline
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate
-
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
 
 # =========================
 # PAGE CONFIG
@@ -17,10 +13,10 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🤖 AI Support Chatbot")
+st.title(" AI Support Chatbot")
 
 # =========================
-# CUSTOM CSS
+# CSS
 # =========================
 st.markdown("""
 <style>
@@ -82,47 +78,28 @@ def load_vectorstore():
     return vectorstore
 
 # =========================
-# LOAD LLM (FIXED)
+# LOAD MODEL (FIXED - NO PIPELINE)
 # =========================
 @st.cache_resource
-def load_llm():
+def load_model():
     model_name = "google/flan-t5-base"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-    pipe = pipeline(
-        task="text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=200
-    )
-
-    return HuggingFacePipeline(pipeline=pipe)
+    return tokenizer, model
 
 # =========================
-# BUILD RAG CHAIN
+# GENERATION FUNCTION
 # =========================
-@st.cache_resource
-def load_qa_chain(_vectorstore, _llm):
+def generate_answer(tokenizer, model, context, question):
 
-    retriever = _vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 3}
-    )
-
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True,
-        output_key="answer"
-    )
-
-    template = """
+    prompt = f"""
 You are a helpful AI assistant.
 
 Use ONLY the context below to answer.
 
-If the answer is not in the context, say:
+If answer is not in context, say:
 "I don't know based on the provided information."
 
 Context:
@@ -131,31 +108,27 @@ Context:
 Question:
 {question}
 
-Answer in a short clear sentence:
+Answer in one clear sentence:
 """
 
-    prompt = PromptTemplate(
-        template=template,
-        input_variables=["context", "question"]
-    )
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
 
-    qa_chain = ConversationalRetrievalChain.from_llm(
-        llm=_llm,
-        retriever=retriever,
-        memory=memory,
-        return_source_documents=False,
-        combine_docs_chain_kwargs={"prompt": prompt}
-    )
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=200,
+            do_sample=True,
+            temperature=0.7
+        )
 
-    return qa_chain
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # =========================
-# LOAD EVERYTHING
+# LOAD RESOURCES
 # =========================
 try:
     vectorstore = load_vectorstore()
-    llm = load_llm()
-    qa_chain = load_qa_chain(vectorstore, llm)
+    tokenizer, model = load_model()
 
 except Exception as e:
     st.error(f"Startup Error: {e}")
@@ -167,15 +140,16 @@ except Exception as e:
 query = st.chat_input("Ask your question...")
 
 if query:
+
     try:
         with st.spinner("Thinking..."):
-            result = qa_chain.invoke({"question": query})
 
-            answer = result["answer"]
+            # Step 1: Retrieve context from FAISS
+            docs = vectorstore.similarity_search(query, k=3)
+            context = "\n\n".join([doc.page_content for doc in docs])
 
-            # Safe output handling
-            if isinstance(answer, list):
-                answer = answer[0].get("generated_text", str(answer))
+            # Step 2: Generate answer
+            answer = generate_answer(tokenizer, model, context, query)
 
     except Exception as e:
         answer = f"Error: {str(e)}"
