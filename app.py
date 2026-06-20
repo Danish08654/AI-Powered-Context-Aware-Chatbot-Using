@@ -87,7 +87,7 @@ def load_vectorstore():
 @st.cache_resource
 def load_llm():
     pipe = pipeline(
-        task="text2text-generation",
+        task="text-generation",
         model="google/flan-t5-base",
         framework="pt",
         max_new_tokens=200,
