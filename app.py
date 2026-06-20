@@ -92,7 +92,7 @@ def load_llm():
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     pipe = pipeline(
-        "text2text-generation",
+        "task="text-generation",
         model=model,
         tokenizer=tokenizer,
         max_new_tokens=200
