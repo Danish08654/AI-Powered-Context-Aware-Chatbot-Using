@@ -67,7 +67,6 @@ if st.sidebar.button("🗑️ Clear Chat"):
 
 @st.cache_resource
 def load_vectorstore():
-
 embedding = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -80,7 +79,6 @@ vectorstore = FAISS.load_local(
 )
 
 return vectorstore
-```
 
 # =========================
 
@@ -90,8 +88,6 @@ return vectorstore
 
 @st.cache_resource
 def load_llm():
-
-```
 pipe = pipeline(
     task="text2text-generation",
     model="google/flan-t5-base",
@@ -104,7 +100,6 @@ pipe = pipeline(
 )
 
 return HuggingFacePipeline(pipeline=pipe)
-```
 
 # =========================
 
@@ -114,8 +109,6 @@ return HuggingFacePipeline(pipeline=pipe)
 
 @st.cache_resource
 def load_qa_chain(_vectorstore, _llm):
-
-```
 retriever = _vectorstore.as_retriever(
     search_type="similarity",
     search_kwargs={"k": 3}
@@ -128,7 +121,6 @@ memory = ConversationBufferMemory(
 )
 
 template = """
-```
 
 You are a helpful AI assistant.
 
@@ -145,8 +137,6 @@ Question:
 
 Answer:
 """
-
-```
 prompt = PromptTemplate(
     template=template,
     input_variables=["context", "question"]
@@ -161,7 +151,6 @@ qa_chain = ConversationalRetrievalChain.from_llm(
 )
 
 return qa_chain
-```
 
 # =========================
 
@@ -203,8 +192,6 @@ st.rerun()
 query = st.chat_input("Ask your question...")
 
 if query:
-
-```
 try:
     with st.spinner("Thinking..."):
 
@@ -227,7 +214,6 @@ st.session_state.chat_history.append(
 st.session_state.chat_history.append(
     ("bot", answer)
 )
-```
 
 # =========================
 
@@ -236,8 +222,6 @@ st.session_state.chat_history.append(
 # =========================
 
 for role, message in st.session_state.chat_history:
-
-```
 if role == "user":
 
     st.markdown(
