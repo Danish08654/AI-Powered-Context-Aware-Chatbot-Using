@@ -87,18 +87,15 @@ def load_vectorstore():
 @st.cache_resource
 def load_llm():
     pipe = pipeline(
-        task="text-generation",
+        task="text2text-generation",
         model="google/flan-t5-base",
-        framework="pt",
         max_new_tokens=200,
-        min_new_tokens=20,
         do_sample=True,
         temperature=0.7,
         repetition_penalty=1.2
     )
 
     return HuggingFacePipeline(pipeline=pipe)
-
 # =========================
 # BUILD RAG CHAIN
 # =========================
